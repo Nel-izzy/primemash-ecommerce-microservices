@@ -119,10 +119,12 @@ services:
     container_name: customer-service
     ports:
       - "5001:5001"
+    env_file:
+      - docker.env
     environment:
-      NODE_ENV: development
       PORT: 5001
       MONGODB_URI: mongodb://customer-db:27017/customer_db
+      SERVICE_NAME: customer-service
     depends_on:
       customer-db:
         condition: service_healthy
@@ -132,6 +134,7 @@ services:
       - ./services/customer-service:/app
       - /app/node_modules
     command: npm run dev
+    restart: unless-stopped
 
   # Product Service
   product-service:
@@ -141,10 +144,12 @@ services:
     container_name: product-service
     ports:
       - "5002:5002"
+    env_file:
+      - docker.env
     environment:
-      NODE_ENV: development
       PORT: 5002
       MONGODB_URI: mongodb://product-db:27017/product_db
+      SERVICE_NAME: product-service
     depends_on:
       product-db:
         condition: service_healthy
@@ -154,6 +159,7 @@ services:
       - ./services/product-service:/app
       - /app/node_modules
     command: npm run dev
+    restart: unless-stopped
 
   # Order Service
   order-service:
@@ -163,13 +169,12 @@ services:
     container_name: order-service
     ports:
       - "5003:5003"
+    env_file:
+      - docker.env
     environment:
-      NODE_ENV: development
       PORT: 5003
       MONGODB_URI: mongodb://order-db:27017/order_db
-      CUSTOMER_SERVICE_URL: http://customer-service:5001
-      PRODUCT_SERVICE_URL: http://product-service:5002
-      PAYMENT_SERVICE_URL: http://payment-service:5004
+      SERVICE_NAME: order-service
     depends_on:
       order-db:
         condition: service_healthy
@@ -183,6 +188,7 @@ services:
       - ./services/order-service:/app
       - /app/node_modules
     command: npm run dev
+    restart: unless-stopped
 
   # Payment Service
   payment-service:
@@ -192,12 +198,12 @@ services:
     container_name: payment-service
     ports:
       - "5004:5004"
+    env_file:
+      - docker.env
     environment:
-      NODE_ENV: development
       PORT: 5004
       MONGODB_URI: mongodb://payment-db:27017/payment_db
-      RABBITMQ_URL: amqp://${RABBITMQ_USER}:${RABBITMQ_PASS}@rabbitmq:5672
-      RABBITMQ_QUEUE: ${RABBITMQ_QUEUE}
+      SERVICE_NAME: payment-service
     depends_on:
       payment-db:
         condition: service_healthy
@@ -209,6 +215,7 @@ services:
       - ./services/payment-service:/app
       - /app/node_modules
     command: npm run dev
+    restart: unless-stopped
 
   # Transaction Worker
   transaction-worker:
@@ -216,11 +223,11 @@ services:
       context: ./workers/transaction-worker
       dockerfile: Dockerfile
     container_name: transaction-worker
+    env_file:
+      - docker.env
     environment:
-      NODE_ENV: development
       MONGODB_URI: mongodb://transaction-db:27017/transaction_db
-      RABBITMQ_URL: amqp://${RABBITMQ_USER}:${RABBITMQ_PASS}@rabbitmq:5672
-      RABBITMQ_QUEUE: ${RABBITMQ_QUEUE}
+      SERVICE_NAME: transaction-worker
     depends_on:
       transaction-db:
         condition: service_healthy
@@ -232,6 +239,7 @@ services:
       - ./workers/transaction-worker:/app
       - /app/node_modules
     command: npm run dev
+    restart: unless-stopped
 
 networks:
   ecommerce-network:
