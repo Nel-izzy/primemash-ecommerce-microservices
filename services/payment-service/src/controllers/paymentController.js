@@ -127,7 +127,7 @@ class PaymentController {
    * Simulate payment processing (Demo purposes only)
    * In production, this would integrate with actual payment gateway
    */
-  simulatePaymentProcessing = async (payment) => {
+  async simulatePaymentProcessing(payment) {
     return new Promise((resolve) => {
       // Simulate processing delay (500ms - 1.5s)
       const delay = Math.random() * 1000 + 500;
