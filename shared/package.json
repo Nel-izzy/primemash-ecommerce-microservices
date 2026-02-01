@@ -1,0 +1,12 @@
+{
+  "name": "@primemash/shared",
+  "version": "1.0.0",
+  "description": "Shared utilities for Primemash Ecommerce Microservices",
+  "main": "index.js",
+  "scripts": {
+    "test": "jest"
+  },
+  "dependencies": {
+    "winston": "^3.11.0"
+  }
+}

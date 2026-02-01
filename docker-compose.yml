@@ -1,0 +1,246 @@
+version: '3.8'
+
+services:
+  # MongoDB for Customer Service
+  customer-db:
+    image: mongo:7.0
+    container_name: customer-db
+    ports:
+      - "27018:27017"
+    environment:
+      MONGO_INITDB_DATABASE: customer_db
+    volumes:
+      - customer-data:/data/db
+    networks:
+      - ecommerce-network
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # MongoDB for Product Service
+  product-db:
+    image: mongo:7.0
+    container_name: product-db
+    ports:
+      - "27019:27017"
+    environment:
+      MONGO_INITDB_DATABASE: product_db
+    volumes:
+      - product-data:/data/db
+    networks:
+      - ecommerce-network
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # MongoDB for Order Service
+  order-db:
+    image: mongo:7.0
+    container_name: order-db
+    ports:
+      - "27020:27017"
+    environment:
+      MONGO_INITDB_DATABASE: order_db
+    volumes:
+      - order-data:/data/db
+    networks:
+      - ecommerce-network
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # MongoDB for Payment Service
+  payment-db:
+    image: mongo:7.0
+    container_name: payment-db
+    ports:
+      - "27021:27017"
+    environment:
+      MONGO_INITDB_DATABASE: payment_db
+    volumes:
+      - payment-data:/data/db
+    networks:
+      - ecommerce-network
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # MongoDB for Transaction History
+  transaction-db:
+    image: mongo:7.0
+    container_name: transaction-db
+    ports:
+      - "27022:27017"
+    environment:
+      MONGO_INITDB_DATABASE: transaction_db
+    volumes:
+      - transaction-data:/data/db
+    networks:
+      - ecommerce-network
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # RabbitMQ Message Broker
+  rabbitmq:
+    image: rabbitmq:3.12-management
+    container_name: rabbitmq
+    ports:
+      - "5673:5672"   # AMQP protocol
+      - "15673:15672" # Management UI
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASS}
+    volumes:
+      - rabbitmq-data:/var/lib/rabbitmq
+    networks:
+      - ecommerce-network
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Customer Service
+  customer-service:
+    build:
+      context: ./services/customer-service
+      dockerfile: Dockerfile
+    container_name: customer-service
+    ports:
+      - "5001:5001"
+    environment:
+      NODE_ENV: development
+      PORT: 5001
+      MONGODB_URI: mongodb://customer-db:27017/customer_db
+    depends_on:
+      customer-db:
+        condition: service_healthy
+    networks:
+      - ecommerce-network
+    volumes:
+      - ./services/customer-service:/app
+      - /app/node_modules
+    command: npm run dev
+
+  # Product Service
+  product-service:
+    build:
+      context: ./services/product-service
+      dockerfile: Dockerfile
+    container_name: product-service
+    ports:
+      - "5002:5002"
+    environment:
+      NODE_ENV: development
+      PORT: 5002
+      MONGODB_URI: mongodb://product-db:27017/product_db
+    depends_on:
+      product-db:
+        condition: service_healthy
+    networks:
+      - ecommerce-network
+    volumes:
+      - ./services/product-service:/app
+      - /app/node_modules
+    command: npm run dev
+
+  # Order Service
+  order-service:
+    build:
+      context: ./services/order-service
+      dockerfile: Dockerfile
+    container_name: order-service
+    ports:
+      - "5003:5003"
+    environment:
+      NODE_ENV: development
+      PORT: 5003
+      MONGODB_URI: mongodb://order-db:27017/order_db
+      CUSTOMER_SERVICE_URL: http://customer-service:5001
+      PRODUCT_SERVICE_URL: http://product-service:5002
+      PAYMENT_SERVICE_URL: http://payment-service:5004
+    depends_on:
+      order-db:
+        condition: service_healthy
+      customer-service:
+        condition: service_started
+      product-service:
+        condition: service_started
+    networks:
+      - ecommerce-network
+    volumes:
+      - ./services/order-service:/app
+      - /app/node_modules
+    command: npm run dev
+
+  # Payment Service
+  payment-service:
+    build:
+      context: ./services/payment-service
+      dockerfile: Dockerfile
+    container_name: payment-service
+    ports:
+      - "5004:5004"
+    environment:
+      NODE_ENV: development
+      PORT: 5004
+      MONGODB_URI: mongodb://payment-db:27017/payment_db
+      RABBITMQ_URL: amqp://${RABBITMQ_USER}:${RABBITMQ_PASS}@rabbitmq:5672
+      RABBITMQ_QUEUE: ${RABBITMQ_QUEUE}
+    depends_on:
+      payment-db:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - ecommerce-network
+    volumes:
+      - ./services/payment-service:/app
+      - /app/node_modules
+    command: npm run dev
+
+  # Transaction Worker
+  transaction-worker:
+    build:
+      context: ./workers/transaction-worker
+      dockerfile: Dockerfile
+    container_name: transaction-worker
+    environment:
+      NODE_ENV: development
+      MONGODB_URI: mongodb://transaction-db:27017/transaction_db
+      RABBITMQ_URL: amqp://${RABBITMQ_USER}:${RABBITMQ_PASS}@rabbitmq:5672
+      RABBITMQ_QUEUE: ${RABBITMQ_QUEUE}
+    depends_on:
+      transaction-db:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - ecommerce-network
+    volumes:
+      - ./workers/transaction-worker:/app
+      - /app/node_modules
+    command: npm run dev
+
+networks:
+  ecommerce-network:
+    driver: bridge
+
+volumes:
+  customer-data:
+  product-data:
+  order-data:
+  payment-data:
+  transaction-data:
+  rabbitmq-data:

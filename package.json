@@ -1,0 +1,28 @@
+{
+  "name": "primemash-ecommerce-microservices",
+  "version": "1.0.0",
+  "description": "Microservices-based e-commerce system for Youverify Backend Engineer Assessment",
+  "private": true,
+  "workspaces": [
+    "services/*",
+    "workers/*",
+    "shared"
+  ],
+  "scripts": {
+    "docker:up": "docker-compose up -d",
+    "docker:down": "docker-compose down",
+    "docker:logs": "docker-compose logs -f",
+    "docker:build": "docker-compose build",
+    "test": "npm run test --workspaces",
+    "seed": "node scripts/seed-all.js"
+  },
+  "keywords": [
+    "microservices",
+    "ecommerce",
+    "nodejs",
+    "mongodb",
+    "rabbitmq"
+  ],
+  "author": "Nelson Enyinnaya Nelson",
+  "license": "ISC"
+}
