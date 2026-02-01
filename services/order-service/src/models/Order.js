@@ -14,7 +14,6 @@ const orderSchema = new mongoose.Schema(
     },
     orderId: {
       type: String,
-      required: true,
       unique: true,
       index: true
     },
@@ -104,8 +103,8 @@ orderSchema.index({ customerId: 1, createdAt: -1 });
 // Index for order status queries
 orderSchema.index({ orderStatus: 1, createdAt: -1 });
 
-// Pre-save middleware to generate orderId if not exists
-orderSchema.pre('save', function(next) {
+// Pre-validate middleware to generate orderId before validation runs
+orderSchema.pre('validate', function(next) {
   if (!this.orderId) {
     // Generate orderId: ORD-TIMESTAMP-RANDOM
     const timestamp = Date.now();

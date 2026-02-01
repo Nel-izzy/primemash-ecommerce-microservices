@@ -38,6 +38,7 @@ class OrderController {
       // Step 3: Calculate amount
       const amount = product.price * quantity;
 
+
       // Step 4: Create order with pending status
       const order = new Order({
         customerId,
