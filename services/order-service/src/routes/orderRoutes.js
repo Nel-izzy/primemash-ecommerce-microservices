@@ -1,14 +1,16 @@
 const express = require('express');
 const orderController = require('../controllers/orderController');
+const { validateRequest } = require('../middleware/validation');
+const { createOrderSchema } = require('../validators/orderValidator');
 
 const router = express.Router();
 
 /**
  * @route   POST /api/orders
- * @desc    Create new order
+ * @desc    Create new order (with input validation)
  * @access  Public
  */
-router.post('/', orderController.createOrder);
+router.post('/', validateRequest(createOrderSchema), orderController.createOrder);
 
 /**
  * @route   GET /api/orders/order/:orderId
