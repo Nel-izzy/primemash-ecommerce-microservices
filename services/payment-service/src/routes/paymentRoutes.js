@@ -15,13 +15,13 @@ router.post('/', paymentController.processPayment.bind(paymentController));
  * @desc    Get payment by ID
  * @access  Public
  */
-router.get('/:id', paymentController.getPaymentById);
+router.get('/:id', paymentController.getPaymentById.bind(paymentController));
 
 /**
  * @route   GET /api/payments
  * @desc    Get all payments with optional filters
  * @access  Public
  */
-router.get('/', paymentController.getAllPayments);
+router.get('/', paymentController.getAllPayments.bind(paymentController));
 
 module.exports = router;

@@ -1,226 +1,137 @@
-const Payment = require('../models/Payment');
-const rabbitmqPublisher = require('../utils/rabbitmqPublisher');
+const Product = require('../models/Product');
 const logger = require('../config/logger');
 
-class PaymentController {
+class ProductController {
   /**
-   * Process payment - Demo/simplified implementation
+   * Get product by ID
    */
-  async processPayment(req, res, next) {
-    try {
-      const { customerId, orderId, amount, currency = 'NGN', productId } = req.body;
-
-      logger.info('Processing payment', { orderId, amount, currency });
-
-      // Validate required fields
-      if (!customerId || !orderId || !amount) {
-        return res.status(400).json({
-          status: 'fail',
-          message: 'Missing required fields: customerId, orderId, amount'
-        });
-      }
-
-      // Create payment record
-      const payment = new Payment({
-        customerId,
-        orderId,
-        productId,
-        amount,
-        currency,
-        paymentStatus: 'processing',
-        paymentMethod: 'card',
-        paymentGateway: 'demo_gateway',
-        processingDetails: {
-          initiatedAt: new Date(),
-          attemptCount: 1
-        }
-      });
-
-      await payment.save();
-      logger.info('Payment record created', {
-        paymentId: payment._id,
-        transactionReference: payment.transactionReference
-      });
-
-      // Simulate payment processing (in real-world, this would call a payment gateway)
-      const paymentResult = await this.simulatePaymentProcessing(payment);
-
-      if (paymentResult.success) {
-        // Update payment status
-        payment.paymentStatus = 'completed';
-        payment.processingDetails.completedAt = new Date();
-        await payment.save();
-
-        logger.info('Payment completed successfully', {
-          paymentId: payment._id,
-          orderId
-        });
-
-        // Publish transaction to RabbitMQ for history tracking
-        const transactionData = {
-          customerId: payment.customerId.toString(),
-          orderId: payment.orderId,
-          productId: payment.productId.toString(),
-          amount: payment.amount,
-          currency: payment.currency,
-          transactionReference: payment.transactionReference,
-          paymentStatus: payment.paymentStatus,
-          paymentMethod: payment.paymentMethod,
-          timestamp: new Date().toISOString()
-        };
-
-        const publishResult = await rabbitmqPublisher.publishTransaction(transactionData);
-
-        if (!publishResult.success) {
-          logger.warn('Failed to publish to RabbitMQ, but payment completed', {
-            paymentId: payment._id,
-            error: publishResult.error
-          });
-        }
-
-        // Return success response
-        return res.status(200).json({
-          status: 'success',
-          message: 'Payment processed successfully',
-          data: {
-            payment: {
-              id: payment._id,
-              customerId: payment.customerId,
-              orderId: payment.orderId,
-              amount: payment.amount,
-              currency: payment.currency,
-              paymentStatus: payment.paymentStatus,
-              transactionReference: payment.transactionReference,
-              paymentMethod: payment.paymentMethod,
-              createdAt: payment.createdAt
-            }
-          }
-        });
-      } else {
-        // Payment failed
-        payment.paymentStatus = 'failed';
-        payment.processingDetails.lastError = paymentResult.error;
-        await payment.save();
-
-        logger.warn('Payment failed', {
-          paymentId: payment._id,
-          orderId,
-          error: paymentResult.error
-        });
-
-        return res.status(400).json({
-          status: 'fail',
-          message: 'Payment processing failed',
-          error: paymentResult.error
-        });
-      }
-    } catch (error) {
-      logger.error('Error processing payment', {
-        error: error.message,
-        stack: error.stack
-      });
-      next(error);
-    }
-  }
-
-  /**
-   * Simulate payment processing (Demo purposes only)
-   * In production, this would integrate with actual payment gateway
-   */
-  simulatePaymentProcessing = async (payment) => {
-    return new Promise((resolve) => {
-      // Simulate processing delay (500ms - 1.5s)
-      const delay = Math.random() * 1000 + 500;
-
-      setTimeout(() => {
-        // Simulate 95% success rate
-        const success = Math.random() > 0.05;
-
-        if (success) {
-          resolve({ success: true });
-        } else {
-          resolve({
-            success: false,
-            error: 'Insufficient funds or card declined'
-          });
-        }
-      }, delay);
-    });
-  }
-
-  /**
-   * Get payment by ID
-   */
-  async getPaymentById(req, res, next) {
+  async getProductById(req, res, next) {
     try {
       const { id } = req.params;
 
-      logger.info(`Fetching payment: ${id}`);
+      logger.info(`Fetching product with ID: ${id}`);
 
-      const payment = await Payment.findById(id);
+      const product = await Product.findById(id);
 
-      if (!payment) {
-        logger.warn(`Payment not found: ${id}`);
+      if (!product) {
+        logger.warn(`Product not found: ${id}`);
         return res.status(404).json({
           status: 'fail',
-          message: 'Payment not found'
+          message: 'Product not found'
         });
       }
+
+      if (!product.isAvailable) {
+        logger.warn(`Unavailable product accessed: ${id}`);
+      }
+
+      logger.info(`Product retrieved successfully: ${id}`);
 
       res.status(200).json({
         status: 'success',
         data: {
-          payment: {
-            id: payment._id,
-            customerId: payment.customerId,
-            orderId: payment.orderId,
-            productId: payment.productId,
-            amount: payment.amount,
-            currency: payment.currency,
-            paymentStatus: payment.paymentStatus,
-            transactionReference: payment.transactionReference,
-            paymentMethod: payment.paymentMethod,
-            paymentGateway: payment.paymentGateway,
-            processingDetails: payment.processingDetails,
-            createdAt: payment.createdAt,
-            updatedAt: payment.updatedAt
+          product: {
+            id: product._id,
+            name: product.name,
+            description: product.description,
+            price: product.price,
+            currency: product.currency,
+            category: product.category,
+            stock: product.stock,
+            stockStatus: product.stockStatus,
+            isInStock: product.isInStock,
+            sku: product.sku,
+            brand: product.brand,
+            images: product.images,
+            specifications: product.specifications,
+            isAvailable: product.isAvailable,
+            rating: product.rating,
+            createdAt: product.createdAt,
+            updatedAt: product.updatedAt
           }
         }
       });
     } catch (error) {
-      logger.error('Error fetching payment', { error: error.message });
+      logger.error('Error fetching product', { error: error.message });
       next(error);
     }
   }
 
   /**
-   * Get all payments with filtering
+   * Get all products with optional filtering
    */
-  async getAllPayments(req, res, next) {
+  async getAllProducts(req, res, next) {
     try {
-      const { customerId, paymentStatus, orderId } = req.query;
+      const { category, isAvailable, minPrice, maxPrice, inStock } = req.query;
       const filter = {};
 
-      if (customerId) filter.customerId = customerId;
-      if (paymentStatus) filter.paymentStatus = paymentStatus;
-      if (orderId) filter.orderId = orderId;
+      // Apply filters
+      if (category) filter.category = category;
+      if (isAvailable !== undefined) filter.isAvailable = isAvailable === 'true';
+      if (inStock === 'true') {
+        filter.stock = { $gt: 0 };
+        filter.isAvailable = true;
+      }
+      if (minPrice || maxPrice) {
+        filter.price = {};
+        if (minPrice) filter.price.$gte = parseFloat(minPrice);
+        if (maxPrice) filter.price.$lte = parseFloat(maxPrice);
+      }
 
-      logger.info('Fetching payments', { filter });
+      logger.info('Fetching products', { filter });
 
-      const payments = await Payment.find(filter)
+      const products = await Product.find(filter)
         .select('-__v')
-        .sort({ createdAt: -1 })
-        .limit(100);
+        .sort({ createdAt: -1 });
 
       res.status(200).json({
         status: 'success',
-        results: payments.length,
+        results: products.length,
         data: {
-          payments
+          products
         }
       });
     } catch (error) {
-      logger.error('Error fetching payments', { error: error.message });
+      logger.error('Error fetching products', { error: error.message });
+      next(error);
+    }
+  }
+
+  /**
+   * Check product availability and stock
+   */
+  async checkAvailability(req, res, next) {
+    try {
+      const { id } = req.params;
+      const { quantity } = req.query;
+
+      logger.info(`Checking availability for product: ${id}`);
+
+      const product = await Product.findById(id);
+
+      if (!product) {
+        return res.status(404).json({
+          status: 'fail',
+          message: 'Product not found'
+        });
+      }
+
+      const requestedQty = quantity ? parseInt(quantity) : 1;
+      const isAvailable = product.isAvailable && product.stock >= requestedQty;
+
+      res.status(200).json({
+        status: 'success',
+        data: {
+          productId: product._id,
+          name: product.name,
+          isAvailable,
+          availableStock: product.stock,
+          requestedQuantity: requestedQty,
+          canFulfill: isAvailable
+        }
+      });
+    } catch (error) {
+      logger.error('Error checking availability', { error: error.message });
       next(error);
     }
   }
@@ -230,26 +141,25 @@ class PaymentController {
    */
   async healthCheck(req, res) {
     try {
+      // Check database connection
       const dbState = require('mongoose').connection.readyState;
       const dbStatus = dbState === 1 ? 'connected' : 'disconnected';
-      const rabbitmqStatus = rabbitmqPublisher.isReady() ? 'connected' : 'disconnected';
 
       res.status(200).json({
         status: 'success',
-        service: 'payment-service',
+        service: 'product-service',
         uptime: process.uptime(),
         timestamp: new Date().toISOString(),
-        database: dbStatus,
-        rabbitmq: rabbitmqStatus
+        database: dbStatus
       });
     } catch (error) {
       res.status(503).json({
         status: 'error',
-        service: 'payment-service',
+        service: 'product-service',
         message: 'Service unavailable'
       });
     }
   }
 }
 
-module.exports = new PaymentController();
+module.exports = new ProductController();

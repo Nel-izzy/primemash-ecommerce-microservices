@@ -29,8 +29,7 @@ const transactionHistorySchema = new mongoose.Schema(
     transactionReference: {
       type: String,
       required: true,
-      unique: true,
-      index: true
+      unique: true
     },
     paymentStatus: {
       type: String,
