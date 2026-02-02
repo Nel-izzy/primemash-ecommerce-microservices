@@ -137,11 +137,177 @@ class ProductController {
   }
 
   /**
+   * Deduct stock - CRITICAL for inventory management
+   * Uses atomic operations to prevent race conditions
+   */
+  async deductStock(req, res, next) {
+    try {
+      const { id } = req.params;
+      const { quantity, orderId } = req.body;
+
+      if (!quantity || quantity < 1) {
+        return res.status(400).json({
+          status: 'fail',
+          message: 'Quantity must be at least 1'
+        });
+      }
+
+      if (!orderId) {
+        return res.status(400).json({
+          status: 'fail',
+          message: 'Order ID is required for stock deduction'
+        });
+      }
+
+      logger.info(`Deducting stock for product: ${id}`, { quantity, orderId });
+
+      // Atomic operation: only deduct if stock is sufficient
+      const product = await Product.findOneAndUpdate(
+        {
+          _id: id,
+          stock: { $gte: quantity },
+          isAvailable: true
+        },
+        {
+          $inc: { stock: -quantity }
+        },
+        {
+          new: true,
+          runValidators: true
+        }
+      );
+
+      if (!product) {
+        const existingProduct = await Product.findById(id);
+        
+        if (!existingProduct) {
+          logger.warn(`Product not found for stock deduction: ${id}`);
+          return res.status(404).json({
+            status: 'fail',
+            message: 'Product not found'
+          });
+        }
+
+        if (!existingProduct.isAvailable) {
+          logger.warn(`Product unavailable for stock deduction: ${id}`);
+          return res.status(400).json({
+            status: 'fail',
+            message: 'Product is not available'
+          });
+        }
+
+        logger.warn(`Insufficient stock for deduction`, {
+          productId: id,
+          requestedQuantity: quantity,
+          availableStock: existingProduct.stock,
+          orderId
+        });
+
+        return res.status(400).json({
+          status: 'fail',
+          message: `Insufficient stock. Available: ${existingProduct.stock}, Requested: ${quantity}`
+        });
+      }
+
+      logger.info(`Stock deducted successfully`, {
+        productId: id,
+        previousStock: product.stock + quantity,
+        newStock: product.stock,
+        quantityDeducted: quantity,
+        orderId
+      });
+
+      res.status(200).json({
+        status: 'success',
+        message: 'Stock deducted successfully',
+        data: {
+          productId: product._id,
+          name: product.name,
+          previousStock: product.stock + quantity,
+          newStock: product.stock,
+          quantityDeducted: quantity,
+          stockStatus: product.stockStatus,
+          isInStock: product.isInStock
+        }
+      });
+    } catch (error) {
+      logger.error('Error deducting stock', { 
+        error: error.message,
+        productId: id,
+        quantity,
+        orderId
+      });
+      next(error);
+    }
+  }
+
+  /**
+   * Restore stock - For order cancellations or failed payments
+   */
+  async restoreStock(req, res, next) {
+    try {
+      const { id } = req.params;
+      const { quantity, orderId, reason } = req.body;
+
+      if (!quantity || quantity < 1) {
+        return res.status(400).json({
+          status: 'fail',
+          message: 'Quantity must be at least 1'
+        });
+      }
+
+      logger.info(`Restoring stock for product: ${id}`, { quantity, orderId, reason });
+
+      const product = await Product.findByIdAndUpdate(
+        id,
+        {
+          $inc: { stock: quantity }
+        },
+        {
+          new: true,
+          runValidators: true
+        }
+      );
+
+      if (!product) {
+        logger.warn(`Product not found for stock restoration: ${id}`);
+        return res.status(404).json({
+          status: 'fail',
+          message: 'Product not found'
+        });
+      }
+
+      logger.info(`Stock restored successfully`, {
+        productId: id,
+        previousStock: product.stock - quantity,
+        newStock: product.stock,
+        quantityRestored: quantity,
+        orderId,
+        reason
+      });
+
+      res.status(200).json({
+        status: 'success',
+        message: 'Stock restored successfully',
+        data: {
+          productId: product._id,
+          name: product.name,
+          previousStock: product.stock - quantity,
+          newStock: product.stock,
+          quantityRestored: quantity
+        }
+      });
+    } catch (error) {
+      logger.error('Error restoring stock', { error: error.message });
+      next(error);
+    }
+  }
+
+  /**
    * Health check endpoint
    */
   async healthCheck(req, res) {
     try {
-      // Check database connection
       const dbState = require('mongoose').connection.readyState;
       const dbStatus = dbState === 1 ? 'connected' : 'disconnected';
 

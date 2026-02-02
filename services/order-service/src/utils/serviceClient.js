@@ -147,6 +147,93 @@ class ServiceClient {
       };
     }
   }
+  /**
+   * Deduct stock after successful payment
+   */
+  async deductStock(productId, quantity, orderId) {
+    try {
+      logger.info(`Deducting stock`, { productId, quantity, orderId });
+
+      const response = await axios.post(
+        `${this.productServiceUrl}/api/products/${productId}/deduct-stock`,
+        { quantity, orderId },
+        { timeout: 5000 }
+      );
+
+      if (response.data.status === 'success') {
+        logger.info('Stock deducted successfully', {
+          productId,
+          quantity,
+          orderId,
+          newStock: response.data.data.newStock
+        });
+        return {
+          success: true,
+          data: response.data.data
+        };
+      }
+
+      return { success: false, error: 'Stock deduction failed' };
+    } catch (error) {
+      logger.error('Stock deduction error', {
+        productId,
+        quantity,
+        orderId,
+        error: error.message,
+        response: error.response?.data
+      });
+
+      if (error.response?.status === 400) {
+        return { 
+          success: false, 
+          error: error.response.data.message || 'Insufficient stock'
+        };
+      }
+
+      return {
+        success: false,
+        error: error.response?.data?.message || 'Product service unavailable'
+      };
+    }
+  }
+
+  /**
+   * Restore stock for cancelled/failed orders
+   */
+  async restoreStock(productId, quantity, orderId, reason) {
+    try {
+      logger.info(`Restoring stock`, { productId, quantity, orderId, reason });
+
+      const response = await axios.post(
+        `${this.productServiceUrl}/api/products/${productId}/restore-stock`,
+        { quantity, orderId, reason },
+        { timeout: 5000 }
+      );
+
+      if (response.data.status === 'success') {
+        logger.info('Stock restored successfully', {
+          productId,
+          quantity,
+          orderId
+        });
+        return { success: true };
+      }
+
+      return { success: false, error: 'Stock restoration failed' };
+    } catch (error) {
+      logger.error('Stock restoration error', {
+        productId,
+        quantity,
+        orderId,
+        error: error.message
+      });
+
+      return {
+        success: false,
+        error: error.response?.data?.message || 'Product service unavailable'
+      };
+    }
+  }
 }
 
 module.exports = new ServiceClient();

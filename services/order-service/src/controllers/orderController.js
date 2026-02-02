@@ -38,7 +38,6 @@ class OrderController {
       // Step 3: Calculate amount
       const amount = product.price * quantity;
 
-
       // Step 4: Create order with pending status
       const order = new Order({
         customerId,
@@ -79,6 +78,32 @@ class OrderController {
         await order.save();
 
         logger.info('Order processing', { orderId: order.orderId, paymentId: order.paymentId });
+
+        // CRITICAL: Deduct stock after successful payment
+        const stockDeduction = await serviceClient.deductStock(
+          productId,
+          quantity,
+          order.orderId
+        );
+
+        if (!stockDeduction.success) {
+          logger.error('Stock deduction failed after payment', {
+            orderId: order.orderId,
+            productId,
+            quantity,
+            error: stockDeduction.error
+          });
+          // Payment succeeded but stock deduction failed
+          // In production: initiate refund or manual reconciliation
+          // For now: log the error but continue (order status remains 'processing')
+        } else {
+          logger.info('Stock deducted successfully', {
+            orderId: order.orderId,
+            productId,
+            quantityDeducted: quantity,
+            newStock: stockDeduction.data.newStock
+          });
+        }
       } else {
         // Payment initiation failed - keep order as pending
         logger.warn('Payment initiation failed', { orderId: order.orderId, error: paymentResult.error });
